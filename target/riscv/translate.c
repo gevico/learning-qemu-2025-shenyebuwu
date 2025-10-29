@@ -846,6 +846,8 @@ static int ex_rvc_shiftri(DisasContext *ctx, int imm)
 
 /* Include the auto-generated decoder for 32 bit insn */
 #include "decode-insn32.c.inc"
+#include "insn_trans/trans_learning.c.inc"
+
 
 static bool gen_logic_imm_fn(DisasContext *ctx, arg_i *a,
                              void (*func)(TCGv, TCGv, target_long))

@@ -717,4 +717,109 @@ target_ulong helper_hyp_hlvx_wu(CPURISCVState *env, target_ulong addr)
     return cpu_ldl_code_mmu(env, addr, oi, ra);
 }
 
+/* learning qemu 自定义指令helper函数 */
+void HELPER(dma)(CPURISCVState *env, target_ulong dst,
+                 target_ulong src, target_ulong gran)
+{
+    /* 简单的DMA转置操作：矩阵转置 */
+    /* 将gran x gran矩阵从src转置到dst */
+    int i, j;
+
+    /*
+     * 测试用例传递的grain值为0、1或2
+     * 映射到矩阵大小分别为8、16、32
+     */
+    int matrix_size = 8 << gran;
+
+    if (gran > 2) {
+        /* 可选：对无效参数抛出异常 */
+        riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST, GETPC());
+        return;
+    }
+    
+    for (i = 0; i < matrix_size; i++) {
+        for (j = 0; j < matrix_size; j++) {
+            uint32_t value = cpu_ldl_data(env, src + (i * matrix_size + j) * 4);
+            cpu_stl_data(env, dst + (j * matrix_size + i) * 4, value);
+        }
+    }
+}
+
+void HELPER(sort)(CPURISCVState *env, target_ulong addr,
+                  target_ulong array_num, target_ulong sort_num)
+{
+    /* 使用冒泡排序算法对数组元素进行升序排序 */
+    uint32_t *arr = g_malloc(sort_num * sizeof(uint32_t));
+    int i, j;
+
+    /* 从内存中读取数组 */
+    for (i = 0; i < sort_num; i++) {
+        arr[i] = cpu_ldl_data(env, addr + i * 4);
+    }
+
+    /* 简单的冒泡排序实现 */
+    for (i = 0; i < sort_num - 1; i++) {
+        int swapped = 0;
+        for (j = 0; j < sort_num - i - 1; j++) {
+            if (arr[j] > arr[j + 1]) {
+                uint32_t temp = arr[j];
+                arr[j] = arr[j + 1];
+                arr[j + 1] = temp;
+                swapped = 1;
+            }
+        }
+        if (!swapped) {
+            break;
+        }
+    }
+
+    /* 将排序后的数组写回内存 */
+    for (i = 0; i < sort_num; i++) {
+        cpu_stl_data(env, addr + i * 4, arr[i]);
+    }
+
+    g_free(arr);
+}
+
+void HELPER(crush)(CPURISCVState *env, target_ulong dst,
+                   target_ulong src, target_ulong num)
+{
+    /* 打包低4位：将2个字节压缩为1个字节 */
+    int i = 0, j = 0;
+
+    while (i + 1 < num) {
+        uint8_t byte1 = cpu_ldub_data(env, src + i);
+        uint8_t byte2 = cpu_ldub_data(env, src + i + 1);
+        uint8_t packed = (byte1 & 0x0F) | ((byte2 & 0x0F) << 4);
+        cpu_stb_data(env, dst + j, packed);
+        i += 2;
+        j++;
+    }
+
+    /* 处理奇数个字节 */
+    if (i < num) {
+        uint8_t byte1 = cpu_ldub_data(env, src + i);
+        uint8_t packed = byte1 & 0x0F;
+        cpu_stb_data(env, dst + j, packed);
+        j++;
+    }
+}
+
+void HELPER(expand)(CPURISCVState *env, target_ulong dst,
+                    target_ulong src, target_ulong num)
+{
+    /* 将每个字节拆分为低4位和高4位 */
+    int i, j = 0;
+
+    for (i = 0; i < num; i++) {
+        uint8_t byte = cpu_ldub_data(env, src + i);
+        /* 先存储低4位 */
+        cpu_stb_data(env, dst + j, byte & 0x0F);
+        j++;
+        /* 再存储高4位 */
+        cpu_stb_data(env, dst + j, (byte >> 4) & 0x0F);
+        j++;
+    }
+}
+
 #endif /* !CONFIG_USER_ONLY */
